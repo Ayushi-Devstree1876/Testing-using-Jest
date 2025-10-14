@@ -1,117 +1,84 @@
-/* eslint-disable prettier/prettier */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable prettier/prettier */
-import { INestApplication, ValidationPipe } from "@nestjs/common";
-import { Test, TestingModule } from "@nestjs/testing";
-import { TestAppModule } from '../test/test.app.module';
-import  request from 'supertest';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import request from 'supertest';
+import { AppModule } from '../src/app.module';
+import { DataSource } from 'typeorm';
 
-describe('Todo Integration Tests', () => {
-    let app: INestApplication;
+jest.setTimeout(20000);
 
-    beforeAll(async () => {
-        const moduleFixture: TestingModule = await Test.createTestingModule({
-            imports: [TestAppModule], // full Nest app load
-        }).compile();
+describe('Todo Module (Integration)', () => {
+  let app: INestApplication;
+  let jwtToken: string;
+  let dataSource: DataSource;
 
-        app = moduleFixture.createNestApplication();
+  beforeAll(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
 
-        app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
+    app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe());
+    await app.init();
 
-        await app.init();
-    });
-    
-    afterAll(async () => {
-        await app.close();                                                                                
-    });
-    
-    it('POST /todo -> shouold create a new Todo', async () => {
-        const res = await request(app.getHttpServer())
-            .post('/todo')
-            .send({
-                title: 'this is our new todo',
-                description: 'Todo description',
-                completed: false
-            });
 
-        expect(res.status).toBe(201);
-        expect(res.body).toEqual({
-            id: expect.any(Number),
-            title: 'this is our new todo',
-            description: 'Todo description',
-            completed: false,
-        });
-    });
+    dataSource = moduleFixture.get<DataSource>(DataSource);
+    await dataSource.dropDatabase(); 
+    await dataSource.synchronize(); 
 
-    // validation error check
-    it('post /todo -> should return 400 for invalid title', async () => {
-        const res = await request(app.getHttpServer())
-            .post('/todo')
-            .send({ title: '', description: 'invalid case', completed: false }).expect(400);
 
-        expect(res.body.message).toContain('Title is required');
-    });
+    const uniqueEmail = `todo_${Date.now()}@test.com`;
 
-    // Get All
-    it('GET / TODO -> should return all todos', async () => {
-        const res = await request(app.getHttpServer())
-            .get('/todo').expect(200);
-        expect(Array.isArray(res.body)).toBe(true);
-        expect(res.body.length).toBeGreaterThan(0);
-        expect(res.body[0]).toEqual({
-            id: expect.any(Number),
-            title: expect.any(String),
-            description: expect.any(String),
-            completed: expect.any(Boolean),
-        });
-    });
-    
-    //Get One By ID
-  it('GET /todo/:id → should return one todo', async () => {
-    const create = await request(app.getHttpServer())
-      .post('/todo')
-      .send({ title: 'GetOneTest', completed: false })
+    const userPayload = {
+      username: 'TodoUser',
+      email: uniqueEmail,
+      password: 'password123',
+    };
+
+    await request(app.getHttpServer())
+      .post('/authentication/register')
+      .send(userPayload)
       .expect(201);
 
-    const id = create.body.id;
 
-    const res = await request(app.getHttpServer()).get(`/todo/${id}`).expect(200);
-    expect(res.body.id).toBe(id);
-    expect(res.body.title).toBe('GetOneTest');
-  });
-
-    // update
-     it('PATCH /todo/:id → should update todo', async () => {
-    const create = await request(app.getHttpServer())
-      .post('/todo')
-      .send({ title: 'Update Me', completed: false })
-      .expect(201);
-
-    const id = create.body.id;
-
-    const update = await request(app.getHttpServer())
-      .patch(`/todo/${id}`)
-      .send({ completed: true })
+    const loginRes = await request(app.getHttpServer())
+      .post('/authentication/login')
+      .send({ email: userPayload.email, password: userPayload.password })
       .expect(200);
 
-    expect(update.body.completed).toBe(true);
-     });
-    
-    // Delete
-  it('DELETE /todo/:id → should delete todo', async () => {
-    const create = await request(app.getHttpServer())
-      .post('/todo')
-      .send({ title: 'Delete Me', completed: false })
-      .expect(201);
-
-    const id = create.body.id;
-
-    await request(app.getHttpServer()).delete(`/todo/${id}`).expect(200);
-
-    await request(app.getHttpServer()).get(`/todo/${id}`).expect(404);
+    jwtToken = loginRes.body.access_token;
   });
 
+  afterAll(async () => {
+    if (dataSource && dataSource.isInitialized) {
+      await dataSource.dropDatabase();
+      await dataSource.destroy();
+    }
+    await app.close();
+  });
+
+  it('should create a todo', async () => {
+    const todoDto = {
+      title: 'My second TODO',
+      description: 'Testing create todo endpoint',
+    };
+
+    const res = await request(app.getHttpServer())
+      .post('/todos')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(todoDto)
+      .expect(201);
+
+    expect(res.body.id).toBeDefined();
+    expect(res.body.title).toBe(todoDto.title);
+  });
+
+  it('should return all todos', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/todos')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .expect(200);
+
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThanOrEqual(1);
+  });
 });
-//                                

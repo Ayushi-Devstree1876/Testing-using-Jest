@@ -1,19 +1,18 @@
 /* eslint-disable prettier/prettier */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable prettier/prettier */
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import { User } from '../../user/entities/user.entity';
 
-@Entity() 
+@Entity('todos')
 export class Todo {
   @PrimaryGeneratedColumn()
-  id: number; 
+  id: number;
 
-  @Column({ length: 255 })
-  title: string; 
+  @Column()
+  title: string;
 
   @Column({ default: false })
-  completed: boolean; 
+  completed: boolean;
 
-  @Column({ nullable: true })
-  description?: string; 
+  @ManyToOne(() => User, (user) => user.todos, { onDelete: 'CASCADE' })
+  user: User;
 }

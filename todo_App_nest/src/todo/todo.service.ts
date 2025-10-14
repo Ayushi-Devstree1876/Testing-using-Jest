@@ -1,60 +1,79 @@
-/* eslint-disable prettier/prettier */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable prettier/prettier */
-import { Injectable , NotFoundException} from '@nestjs/common';
-import { CreateTodoDto } from './dto/create-todo.dto';
-import { UpdateTodoDto } from './dto/update-todo.dto';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Todo } from './entities/todo.entity';
-import { BadRequestException } from '@nestjs/common';
+import { CreateTodoDto } from './dto/create-todo.dto';
+import { UpdateTodoDto } from './dto/update-todo.dto';
+import { User } from '../user/entities/user.entity';
 
 @Injectable()
 export class TodoService {
-  constructor(@InjectRepository(Todo) private readonly todorepository:Repository<Todo>,){}
+  constructor(
+    @InjectRepository(Todo) private readonly todoRepository: Repository<Todo>,
+    @InjectRepository(User) private readonly userRepository: Repository<User>,
+  ) {}
 
-  async create(createTodoDto: CreateTodoDto):Promise<Todo> {
+  async create(createTodoDto: CreateTodoDto, user: User): Promise<Todo> {
     const { title, description } = createTodoDto;
+
     if (!title || title.trim() === '') {
       throw new BadRequestException('Title cannot be empty');
     }
-
     if (title.length > 100) {
       throw new BadRequestException('Title cannot exceed 100 characters');
     }
-
     if (description && description.length > 255) {
       throw new BadRequestException('Description cannot exceed 255 characters');
     }
 
-    const todo = this.todorepository.create(createTodoDto);
-    return this.todorepository.save(todo);
+    const todo = this.todoRepository.create({
+      ...createTodoDto,
+      user,
+    });
+
+    return await this.todoRepository.save(todo);
   }
 
-  async findAll():Promise<Todo[]> {
-   return this.todorepository.find();
+  async findAll(userId?: number): Promise<Todo[]> {
+    if (userId) {
+      return this.todoRepository.find({
+        where: { user: { id: userId } },
+        relations: ['user'],
+      });
+    }
+    return this.todoRepository.find({ relations: ['user'] });
   }
 
-  async findOne(id: number): Promise<Todo> {
-  if (id <= 0) {
-    throw new BadRequestException('Invalid ID: must be greater than 0');
-  }
-  const todo = await this.todorepository.findOneBy({ id });
-  if (!todo) {
-    throw new NotFoundException(`Todo with ID ${id} not found`);
-  }
-  return todo;
-}
+  async findOne(id: number, userId?: number): Promise<Todo> {
+    if (id <= 0) {
+      throw new BadRequestException('Invalid ID: must be greater than 0');
+    }
 
+    const todo = await this.todoRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
 
- async update(id: number, updateTodoDto: UpdateTodoDto): Promise<Todo> {
-    const todo = await this.findOne(id); 
-    Object.assign(todo, updateTodoDto); 
-    return this.todorepository.save(todo);
+    if (!todo) {
+      throw new NotFoundException(`Todo with ID ${id} not found`);
+    }
+
+    if (userId && todo.user.id !== userId) {
+      throw new ForbiddenException('You do not have permission to access this todo');
+    }
+
+    return todo;
   }
 
-  async remove(id: number): Promise<void> {
-    const todo = await this.findOne(id); 
-    await this.todorepository.remove(todo);
+  async update(id: number, updateTodoDto: UpdateTodoDto, userId: number): Promise<Todo> {
+    const todo = await this.findOne(id, userId);
+    Object.assign(todo, updateTodoDto);
+    return this.todoRepository.save(todo);
+  }
+
+  // ✅ Fixed remove method: works with database
+  async remove(id: number, userId: number): Promise<void> {
+    const todo = await this.findOne(id, userId); // validates ownership
+    await this.todoRepository.remove(todo);
   }
 }

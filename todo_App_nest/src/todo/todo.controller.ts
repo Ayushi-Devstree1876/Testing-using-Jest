@@ -1,37 +1,43 @@
-/* eslint-disable prettier/prettier */
-import { Controller, Get, Post, Body, Patch, Param, Delete, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { TodoService } from './todo.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guards';
 import { CreateTodoDto } from './dto/create-todo.dto';
-import { UpdateTodoDto } from './dto/update-todo.dto';
 import { Todo } from './entities/todo.entity';
 
-@Controller('todo')
+@Controller('todos')
 export class TodoController {
   constructor(private readonly todoService: TodoService) {}
 
+  @UseGuards(JwtAuthGuard)
   @Post()
-  create(@Body() createTodoDto: CreateTodoDto):Promise<Todo> {
-    return this.todoService.create(createTodoDto);
+  async create(@Body() createTodoDto: CreateTodoDto, @Request() req): Promise<Todo> {
+    return this.todoService.create(createTodoDto, req.user.sub); // user ID from JWT
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get()
-  findAll():Promise<Todo[]> {
-    return this.todoService.findAll();
+  async findAll(@Request() req): Promise<Todo[]> {
+    return this.todoService.findAll(req.user.sub); // return only user's todos
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number): Promise<Todo> {
-  return this.todoService.findOne(id);
-}
-
-
-  @Patch(':id')
-  update(@Param('id',ParseIntPipe) id: number, @Body() updateTodoDto: UpdateTodoDto):Promise<Todo> {
-    return this.todoService.update(+id, updateTodoDto);
+  async findOne(@Param('id') id: number, @Request() req): Promise<Todo> {
+    return this.todoService.findOne(id, req.user.sub);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Delete(':id')
-  remove(@Param('id',ParseIntPipe) id: number):Promise<void> {
-    return this.todoService.remove(+id);
+  async remove(@Param('id') id: number, @Request() req): Promise<void> {
+    await this.todoService.remove(id, req.user.sub); // void return
   }
 }

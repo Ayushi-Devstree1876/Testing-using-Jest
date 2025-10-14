@@ -5,9 +5,14 @@ import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TodoModule } from './todo/todo.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { UserModule } from './user/user.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
+     TodoModule,
+    UserModule,
+    AuthModule,
     ConfigModule.forRoot({
       isGlobal:true
     }),
@@ -22,11 +27,14 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
        password:ConfigService.get<string>('DB_PASS'),
        database:ConfigService.get<string>('DB_NAME'),
        autoLoadEntities:true,
-       synchronize:true
+        synchronize: true,
+      
       })
     }),
-    TodoModule],
+   
+    ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}
+                                                    
