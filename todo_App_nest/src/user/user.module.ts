@@ -8,11 +8,11 @@ import { AuthModule } from '../auth/auth.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
-    forwardRef(() => AuthModule), // ✅ Use forwardRef to fix circular dependency
+    forwardRef(() => AuthModule), 
   ],
   controllers: [UserController],
   providers: [UserService],
-  exports: [UserService, TypeOrmModule], // ✅ Export TypeOrmModule if other modules need repository
+  exports: [UserService, TypeOrmModule],
 })
 export class UserModule {}
-//                                                          
+                                                        

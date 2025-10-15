@@ -71,9 +71,9 @@ export class TodoService {
     return this.todoRepository.save(todo);
   }
 
-  // ✅ Fixed remove method: works with database
+  
   async remove(id: number, userId: number): Promise<void> {
-    const todo = await this.findOne(id, userId); // validates ownership
+    const todo = await this.findOne(id, userId);
     await this.todoRepository.remove(todo);
   }
 }

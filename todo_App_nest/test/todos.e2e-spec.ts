@@ -1,3 +1,5 @@
+/* eslint-disable prettier/prettier */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
@@ -20,11 +22,9 @@ describe('Todo Module (Integration)', () => {
     app.useGlobalPipes(new ValidationPipe());
     await app.init();
 
-
     dataSource = moduleFixture.get<DataSource>(DataSource);
     await dataSource.dropDatabase(); 
     await dataSource.synchronize(); 
-
 
     const uniqueEmail = `todo_${Date.now()}@test.com`;
 
@@ -38,7 +38,6 @@ describe('Todo Module (Integration)', () => {
       .post('/authentication/register')
       .send(userPayload)
       .expect(201);
-
 
     const loginRes = await request(app.getHttpServer())
       .post('/authentication/login')
@@ -55,7 +54,7 @@ describe('Todo Module (Integration)', () => {
     }
     await app.close();
   });
-
+  
   it('should create a todo', async () => {
     const todoDto = {
       title: 'My second TODO',
@@ -80,5 +79,108 @@ describe('Todo Module (Integration)', () => {
 
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // Negative tests
+  it('should fail to create a todo with empty title', async () => {
+    const todoDto = {
+      title: '',
+      description: 'This should fail'
+    };
+
+    const res = await request(app.getHttpServer())
+      .post('/todos')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(todoDto)
+      .expect(400);
+
+    expect(res.body.message).toEqual(
+      expect.arrayContaining(['Title is required'])
+    );
+  });
+
+  it('should fail to create a todo with too long title', async () => {
+    const todoDto = {
+      title: 'a'.repeat(101),
+      description: 'This should fail'
+    };
+
+    const res = await request(app.getHttpServer())
+      .post('/todos')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(todoDto)
+      .expect(400);
+
+    expect(res.body.message).toEqual(
+      expect.arrayContaining(['Title must not exceed 100 characters'])
+    );
+  });
+
+  it('should fail to create a todo with non-string title', async () => {
+    const todoDto = {
+      title: 123,
+      description: 'This should fail'
+    };
+
+    const res = await request(app.getHttpServer())
+      .post('/todos')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(todoDto)
+      .expect(400);
+
+    expect(res.body.message).toEqual(
+      expect.arrayContaining(['Title must be a string'])
+    );
+  });
+
+  it('should fail to create a todo with non-string description', async () => {
+    const todoDto = {
+      title: 'Valid Title',
+      description: 12345
+    };
+
+    const res = await request(app.getHttpServer())
+      .post('/todos')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(todoDto)
+      .expect(400);
+
+    expect(res.body.message).toEqual(
+      expect.arrayContaining(['Description must be a string'])
+    );
+  });
+
+  it('should fail to create a todo with description exceeding 200 chars', async () => {
+    const todoDto = {
+      title: 'Valid Title',
+      description: 'a'.repeat(201)
+    };
+
+    const res = await request(app.getHttpServer())
+      .post('/todos')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(todoDto)
+      .expect(400);
+
+    expect(res.body.message).toEqual(
+      expect.arrayContaining(['Description must not exceed 200 characters'])
+    );
+  });
+
+  it('should fail to create a todo with non-boolean completed', async () => {
+    const todoDto = {
+      title: 'Valid Title',
+      completed: 'yes'
+    };
+
+    const res = await request(app.getHttpServer())
+      .post('/todos')
+      .set('Authorization', `Bearer ${jwtToken}`)
+      .send(todoDto)
+      .expect(400);
+
+    expect(res.body.message).toEqual(
+      expect.arrayContaining(['Completed must be a boolean'])
+    );
   });
 });

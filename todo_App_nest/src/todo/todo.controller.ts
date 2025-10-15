@@ -20,13 +20,13 @@ export class TodoController {
   @UseGuards(JwtAuthGuard)
   @Post()
   async create(@Body() createTodoDto: CreateTodoDto, @Request() req): Promise<Todo> {
-    return this.todoService.create(createTodoDto, req.user.sub); // user ID from JWT
+    return this.todoService.create(createTodoDto, req.user.sub); 
   }
 
   @UseGuards(JwtAuthGuard)
   @Get()
   async findAll(@Request() req): Promise<Todo[]> {
-    return this.todoService.findAll(req.user.sub); // return only user's todos
+    return this.todoService.findAll(req.user.sub); 
   }
 
   @UseGuards(JwtAuthGuard)
@@ -38,6 +38,6 @@ export class TodoController {
   @UseGuards(JwtAuthGuard)
   @Delete(':id')
   async remove(@Param('id') id: number, @Request() req): Promise<void> {
-    await this.todoService.remove(id, req.user.sub); // void return
+    await this.todoService.remove(id, req.user.sub); 
   }
 }

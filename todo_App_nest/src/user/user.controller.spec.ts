@@ -17,7 +17,7 @@ describe('UserController', () => {
       controllers: [UserController],
       providers: [{ provide: UserService, useValue: mockUserService }],
     })
-      // ✅ Mock JwtAuthGuard globally
+      
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: (context: ExecutionContext) => true })
       .compile();

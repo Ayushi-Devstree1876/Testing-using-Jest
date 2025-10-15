@@ -44,7 +44,7 @@ describe('TodoService', () => {
     userRepo = module.get(getRepositoryToken(User));
   });
 
-  // ✅ CREATE
+
   describe('create', () => {
     it('should create and save a todo successfully', async () => {
       const dto = { title: 'New Todo', description: 'Desc' };
@@ -71,7 +71,7 @@ describe('TodoService', () => {
     });
   });
 
-  // ✅ FIND ALL
+ 
   describe('findAll', () => {
     it('should return all todos for a user', async () => {
       todoRepo.find.mockResolvedValue([mockTodo]);
@@ -87,7 +87,7 @@ describe('TodoService', () => {
     });
   });
 
-  // ✅ FIND ONE
+  
   describe('findOne', () => {
     it('should return a todo if found and user authorized', async () => {
       todoRepo.findOne.mockResolvedValue(mockTodo);
@@ -110,7 +110,7 @@ describe('TodoService', () => {
     });
   });
 
-  // ✅ UPDATE
+  
   describe('update', () => {
     it('should update and return the updated todo', async () => {
       todoRepo.findOne.mockResolvedValue(mockTodo);
@@ -122,7 +122,7 @@ describe('TodoService', () => {
     });
   });
 
-  // ✅ REMOVE
+  
   describe('remove', () => {
     it('should remove a todo successfully', async () => {
       todoRepo.findOne.mockResolvedValue(mockTodo);

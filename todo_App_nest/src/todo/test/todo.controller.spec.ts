@@ -26,7 +26,7 @@ describe('TodoController', () => {
         },
       ],
     })
-      // ✅ Mock JwtAuthGuard globally
+
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => true,
@@ -39,7 +39,7 @@ describe('TodoController', () => {
 
   it('should create a todo', async () => {
     const createTodoDto: CreateTodoDto = { title: 'Test', description: 'desc' };
-    const mockUser = { sub: 1 }; // simulate JWT payload
+    const mockUser = { sub: 1 }; 
     const expectedTodo: Todo = { id: 1, ...createTodoDto, user: { id: 1 } } as any;
 
     jest.spyOn(todoService, 'create').mockResolvedValue(expectedTodo);
