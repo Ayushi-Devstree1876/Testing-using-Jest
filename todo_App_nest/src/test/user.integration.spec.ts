@@ -1,11 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
+import { AppModule } from '../app.module';
 import { DataSource } from 'typeorm';
-import { AppModule } from '../src/app.module';
-import { User } from '../src/user/entities/user.entity';
 
-jest.setTimeout(30000); 
+jest.setTimeout(30000);
 
 describe('User Module (Integration)', () => {
   let app: INestApplication;
@@ -17,32 +17,25 @@ describe('User Module (Integration)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     await app.init();
 
-    dataSource = app.get(DataSource);
-  },30000);
+    dataSource = moduleFixture.get<DataSource>(DataSource);
 
-  beforeEach(async () => {
-    await dataSource.getRepository(User).query('TRUNCATE TABLE users RESTART IDENTITY CASCADE');
+    // Clear DB before tests
+    await dataSource.synchronize(true);
   });
 
   afterAll(async () => {
+    if (dataSource && dataSource.isInitialized) {
+      await dataSource.dropDatabase();
+      await dataSource.destroy();
+    }
     await app.close();
   });
 
   it('should register a user successfully', async () => {
-    const user = {
-      username: 'testuser',
-      email: 'testuser@example.com',
-      password: 'password123',
-    };
+    const user = { username: 'testuser', email: 'testuser@example.com', password: 'password123' };
 
     const res = await request(app.getHttpServer())
       .post('/authentication/register')
@@ -54,17 +47,15 @@ describe('User Module (Integration)', () => {
   });
 
   it('should login a user successfully', async () => {
-    const user = {
-      username: 'testuser2',
-      email: 'testuser2@example.com',
-      password: 'password123',
-    };
+    const user = { username: 'loginuser', email: 'loginuser@example.com', password: 'password123' };
 
+    // Register first
     await request(app.getHttpServer())
       .post('/authentication/register')
       .send(user)
       .expect(201);
 
+    // Login
     const res = await request(app.getHttpServer())
       .post('/authentication/login')
       .send({ email: user.email, password: user.password })
@@ -73,6 +64,7 @@ describe('User Module (Integration)', () => {
     expect(res.body).toHaveProperty('access_token');
   });
 
+  // Negative tests
   it('should fail registration when username is missing', async () => {
     const user = { email: 'nouser@example.com', password: 'password123' };
 
@@ -84,7 +76,7 @@ describe('User Module (Integration)', () => {
     expect(res.body.message).toContain('Username should not be empty');
   });
 
-  it('should fail registration with invalid email format', async () => {
+  it('should fail registration with invalid email', async () => {
     const user = { username: 'user2', email: 'invalidemail', password: 'password123' };
 
     const res = await request(app.getHttpServer())
@@ -107,13 +99,15 @@ describe('User Module (Integration)', () => {
   });
 
   it('should fail login with incorrect password', async () => {
-    const user = { username: 'testuser4', email: 'testuser4@example.com', password: 'password123' };
+    const user = { username: 'user4', email: 'user4@example.com', password: 'password123' };
 
+    // Register first
     await request(app.getHttpServer())
       .post('/authentication/register')
       .send(user)
       .expect(201);
 
+    // Login with wrong password
     const res = await request(app.getHttpServer())
       .post('/authentication/login')
       .send({ email: user.email, password: 'wrongpass' })

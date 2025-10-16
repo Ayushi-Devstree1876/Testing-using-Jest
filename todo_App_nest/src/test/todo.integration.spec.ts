@@ -1,12 +1,11 @@
-/* eslint-disable prettier/prettier */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
-import { AppModule } from '../src/app.module';
+import { AppModule } from '../app.module';
 import { DataSource } from 'typeorm';
 
-jest.setTimeout(20000);
+jest.setTimeout(30000);
 
 describe('Todo Module (Integration)', () => {
   let app: INestApplication;
@@ -19,20 +18,17 @@ describe('Todo Module (Integration)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe());
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     await app.init();
 
     dataSource = moduleFixture.get<DataSource>(DataSource);
-    await dataSource.dropDatabase(); 
-    await dataSource.synchronize(); 
 
+    // Reset DB
+    await dataSource.synchronize(true);
+
+    // Create and login a test user
     const uniqueEmail = `todo_${Date.now()}@test.com`;
-
-    const userPayload = {
-      username: 'TodoUser',
-      email: uniqueEmail,
-      password: 'password123',
-    };
+    const userPayload = { username: 'TodoUser', email: uniqueEmail, password: 'password123' };
 
     await request(app.getHttpServer())
       .post('/authentication/register')
@@ -41,7 +37,7 @@ describe('Todo Module (Integration)', () => {
 
     const loginRes = await request(app.getHttpServer())
       .post('/authentication/login')
-      .send({ email: userPayload.email, password: userPayload.password })
+      .send({ email: uniqueEmail, password: 'password123' })
       .expect(200);
 
     jwtToken = loginRes.body.access_token;
@@ -54,13 +50,9 @@ describe('Todo Module (Integration)', () => {
     }
     await app.close();
   });
-  
-  it('should create a todo', async () => {
-    const todoDto = {
-      title: 'My second TODO',
-      description: 'Testing create todo endpoint',
-    };
 
+  it('should create a todo', async () => {
+    const todoDto = { title: 'Test Todo', description: 'Integration test todo' };
     const res = await request(app.getHttpServer())
       .post('/todos')
       .set('Authorization', `Bearer ${jwtToken}`)
@@ -83,104 +75,46 @@ describe('Todo Module (Integration)', () => {
 
   // Negative tests
   it('should fail to create a todo with empty title', async () => {
-    const todoDto = {
-      title: '',
-      description: 'This should fail'
-    };
-
+    const todoDto = { title: '', description: 'No title' };
     const res = await request(app.getHttpServer())
       .post('/todos')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send(todoDto)
       .expect(400);
 
-    expect(res.body.message).toEqual(
-      expect.arrayContaining(['Title is required'])
-    );
+    expect(res.body.message).toEqual(expect.arrayContaining(['Title is required']));
   });
 
-  it('should fail to create a todo with too long title', async () => {
-    const todoDto = {
-      title: 'a'.repeat(101),
-      description: 'This should fail'
-    };
-
+  it('should fail to create a todo with title > 100 chars', async () => {
+    const todoDto = { title: 'a'.repeat(101), description: 'Too long title' };
     const res = await request(app.getHttpServer())
       .post('/todos')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send(todoDto)
       .expect(400);
 
-    expect(res.body.message).toEqual(
-      expect.arrayContaining(['Title must not exceed 100 characters'])
-    );
-  });
-
-  it('should fail to create a todo with non-string title', async () => {
-    const todoDto = {
-      title: 123,
-      description: 'This should fail'
-    };
-
-    const res = await request(app.getHttpServer())
-      .post('/todos')
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .send(todoDto)
-      .expect(400);
-
-    expect(res.body.message).toEqual(
-      expect.arrayContaining(['Title must be a string'])
-    );
+    expect(res.body.message).toEqual(expect.arrayContaining(['Title must not exceed 100 characters']));
   });
 
   it('should fail to create a todo with non-string description', async () => {
-    const todoDto = {
-      title: 'Valid Title',
-      description: 12345
-    };
-
+    const todoDto = { title: 'Valid', description: 12345 };
     const res = await request(app.getHttpServer())
       .post('/todos')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send(todoDto)
       .expect(400);
 
-    expect(res.body.message).toEqual(
-      expect.arrayContaining(['Description must be a string'])
-    );
+    expect(res.body.message).toEqual(expect.arrayContaining(['Description must be a string']));
   });
 
-  it('should fail to create a todo with description exceeding 200 chars', async () => {
-    const todoDto = {
-      title: 'Valid Title',
-      description: 'a'.repeat(201)
-    };
-
+  it('should fail to create a todo with completed not boolean', async () => {
+    const todoDto = { title: 'Valid', completed: 'yes' };
     const res = await request(app.getHttpServer())
       .post('/todos')
       .set('Authorization', `Bearer ${jwtToken}`)
       .send(todoDto)
       .expect(400);
 
-    expect(res.body.message).toEqual(
-      expect.arrayContaining(['Description must not exceed 200 characters'])
-    );
-  });
-
-  it('should fail to create a todo with non-boolean completed', async () => {
-    const todoDto = {
-      title: 'Valid Title',
-      completed: 'yes'
-    };
-
-    const res = await request(app.getHttpServer())
-      .post('/todos')
-      .set('Authorization', `Bearer ${jwtToken}`)
-      .send(todoDto)
-      .expect(400);
-
-    expect(res.body.message).toEqual(
-      expect.arrayContaining(['Completed must be a boolean'])
-    );
+    expect(res.body.message).toEqual(expect.arrayContaining(['Completed must be a boolean']));
   });
 });

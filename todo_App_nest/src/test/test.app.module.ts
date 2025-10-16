@@ -1,7 +1,7 @@
 /* eslint-disable prettier/prettier */
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { TodoModule } from '../src/todo/todo.module';
+import { TodoModule } from '../todo/todo.module';
 
 @Module({
   imports: [
