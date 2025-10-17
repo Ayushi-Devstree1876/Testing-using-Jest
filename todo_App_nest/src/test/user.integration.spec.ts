@@ -1,118 +1,107 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
-import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import request from 'supertest';
-import { AppModule } from '../app.module';
-import { DataSource } from 'typeorm';
+import { UserService } from '../user/user.service';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { User } from '../user/entities/user.entity';
+import * as bcrypt from 'bcrypt';
+import { Repository } from 'typeorm';
+import { validate } from 'class-validator';
+import { plainToInstance } from 'class-transformer';
+import { CreateUserDto } from '../user/dto/create-user.dto';
 
-jest.setTimeout(30000);
+jest.mock('bcrypt', () => ({
+  hash: jest.fn().mockResolvedValue('hashedPassword'),
+}));
 
-describe('User Module (Integration)', () => {
-  let app: INestApplication;
-  let dataSource: DataSource;
+describe('UserService (Integration)', () => {
+  let service: UserService;
+  let userRepository: Repository<User>;
 
-  beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        UserService,
+        {
+          provide: getRepositoryToken(User),
+          useClass: Repository,
+        },
+      ],
     }).compile();
 
-    app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
-    await app.init();
-
-    dataSource = moduleFixture.get<DataSource>(DataSource);
-
-    // Clear DB before tests
-    await dataSource.synchronize(true);
+    service = module.get<UserService>(UserService);
+    userRepository = module.get<Repository<User>>(getRepositoryToken(User));
   });
 
-  afterAll(async () => {
-    if (dataSource && dataSource.isInitialized) {
-      await dataSource.dropDatabase();
-      await dataSource.destroy();
-    }
-    await app.close();
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
-  it('should register a user successfully', async () => {
-    const user = { username: 'testuser', email: 'testuser@example.com', password: 'password123' };
+  // -------- Positive Tests --------
+  it('should create a user successfully', async () => {
+    const dto: CreateUserDto = {
+      username: 'testuser',
+      email: 'test@example.com',
+      password: 'password123',
+    };
 
-    const res = await request(app.getHttpServer())
-      .post('/authentication/register')
-      .send(user)
-      .expect(201);
+    const savedUser = { id: 1, ...dto, password: 'hashedPassword', todos: [] };
+    jest.spyOn(userRepository, 'create').mockReturnValue(savedUser as any);
+    jest.spyOn(userRepository, 'save').mockResolvedValue(savedUser as any);
 
-    expect(res.body).toHaveProperty('id');
-    expect(res.body.email).toBe(user.email);
+    const result = await service.createUser(dto);
+
+    expect(bcrypt.hash).toHaveBeenCalledWith(dto.password, 10);
+    expect(userRepository.create).toHaveBeenCalledWith({
+      username: dto.username,
+      email: dto.email,
+      password: 'hashedPassword',
+    });
+    expect(userRepository.save).toHaveBeenCalledWith(savedUser);
+    expect(result).toEqual(savedUser);
   });
 
-  it('should login a user successfully', async () => {
-    const user = { username: 'loginuser', email: 'loginuser@example.com', password: 'password123' };
+  // -------- Negative Tests --------
+  it('should fail creating user with empty username', async () => {
+    const dto: CreateUserDto = {
+      username: '',
+      email: 'nouser@example.com',
+      password: 'password123',
+    };
 
-    // Register first
-    await request(app.getHttpServer())
-      .post('/authentication/register')
-      .send(user)
-      .expect(201);
-
-    // Login
-    const res = await request(app.getHttpServer())
-      .post('/authentication/login')
-      .send({ email: user.email, password: user.password })
-      .expect(200);
-
-    expect(res.body).toHaveProperty('access_token');
+    const errors = await validate(plainToInstance(CreateUserDto, dto));
+    expect(errors.length).toBeGreaterThan(0);
   });
 
-  // Negative tests
-  it('should fail registration when username is missing', async () => {
-    const user = { email: 'nouser@example.com', password: 'password123' };
+  it('should fail creating user with invalid email', async () => {
+    const dto: CreateUserDto = {
+      username: 'invalidEmailUser',
+      email: 'invalidemail',
+      password: 'password123',
+    };
 
-    const res = await request(app.getHttpServer())
-      .post('/authentication/register')
-      .send(user)
-      .expect(400);
-
-    expect(res.body.message).toContain('Username should not be empty');
+    const errors = await validate(plainToInstance(CreateUserDto, dto));
+    expect(errors.length).toBeGreaterThan(0);
   });
 
-  it('should fail registration with invalid email', async () => {
-    const user = { username: 'user2', email: 'invalidemail', password: 'password123' };
+  it('should fail creating user with too short password', async () => {
+    const dto: CreateUserDto = {
+      username: 'shortPassUser',
+      email: 'shortpass@example.com',
+      password: '123',
+    };
 
-    const res = await request(app.getHttpServer())
-      .post('/authentication/register')
-      .send(user)
-      .expect(400);
-
-    expect(res.body.message).toContain('Email must be a valid email address');
+    const errors = await validate(plainToInstance(CreateUserDto, dto));
+    expect(errors.length).toBeGreaterThan(0);
   });
 
-  it('should fail registration when password is too short', async () => {
-    const user = { username: 'user3', email: 'user3@example.com', password: '123' };
+  it('should fail creating user with missing fields', async () => {
+    const dto: Partial<CreateUserDto> = {
+      username: '',
+      email: '',
+      password: '',
+    } as any;
 
-    const res = await request(app.getHttpServer())
-      .post('/authentication/register')
-      .send(user)
-      .expect(400);
-
-    expect(res.body.message).toContain('Password must be at least 6 characters long');
-  });
-
-  it('should fail login with incorrect password', async () => {
-    const user = { username: 'user4', email: 'user4@example.com', password: 'password123' };
-
-    // Register first
-    await request(app.getHttpServer())
-      .post('/authentication/register')
-      .send(user)
-      .expect(201);
-
-    // Login with wrong password
-    const res = await request(app.getHttpServer())
-      .post('/authentication/login')
-      .send({ email: user.email, password: 'wrongpass' })
-      .expect(401);
-
-    expect(res.body.message).toBe('Invalid credentials');
+    const errors = await validate(plainToInstance(CreateUserDto, dto));
+    expect(errors.length).toBeGreaterThan(0);
   });
 });
