@@ -6,7 +6,7 @@ import { Todo } from '../todo/entities/todo.entity';
 import { TodoService } from '../todo/todo.service';
 import { User } from '../user/entities/user.entity';
 import { AppModule } from '../app.module';
-//import { describe } from 'node:test';
+
 
 jest.setTimeout(30000)
 
